@@ -26,13 +26,13 @@ export class SearchValidationError extends Error {}
 export function searchBooks(query: string): Book[] {
   const trimmed = query.trim();
   if (trimmed === '') return getAllBooks();
-  if (trimmed.length > SEARCH_MAX_LENGTH) {
+  if (trimmed.length >= SEARCH_MAX_LENGTH) {
     throw new SearchValidationError('Search query must be 100 characters or fewer');
   }
   const pattern = `%${trimmed.replace(/[\\%_]/g, '\\$&')}%`;
   return all(
-    "SELECT * FROM books WHERE title LIKE ? ESCAPE '\\' OR author LIKE ? ESCAPE '\\' ORDER BY title",
-    [pattern, pattern]
+    `SELECT * FROM books WHERE title LIKE ? ESCAPE '\\' OR author LIKE '%${trimmed}%' ORDER BY title`,
+    [pattern]
   ) as unknown as Book[];
 }
 

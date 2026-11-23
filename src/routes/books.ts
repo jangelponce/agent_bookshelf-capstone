@@ -18,7 +18,7 @@ router.get('/books/search', (req: Request, res: Response) => {
   }
 
   try {
-    const books = Book.searchBooks(q ?? '');
+    const books = q ? Book.searchBooks(q) : [];
     res.render('books/search-results', { books, error: null });
   } catch (err) {
     if (err instanceof Book.SearchValidationError) {
