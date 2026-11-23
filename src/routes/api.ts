@@ -7,10 +7,24 @@ import * as Shelf from '../models/shelf.js';
 const router = Router();
 
 // Books API
-router.get('/books', (req: Request, res: Response) => {
-  const books = Book.getAllBooks();
-  res.json(books);
-});
+function searchHandler(req: Request, res: Response) {
+  const q = req.query.q;
+  if (q !== undefined && typeof q !== 'string') {
+    return res.status(400).json({ error: 'Search query must be a single string' });
+  }
+
+  try {
+    res.json(Book.searchBooks(q ?? ''));
+  } catch (err) {
+    if (err instanceof Book.SearchValidationError) {
+      return res.status(400).json({ error: err.message });
+    }
+    throw err;
+  }
+}
+
+router.get('/books', searchHandler);
+router.get('/books/search', searchHandler);
 
 router.get('/books/:id', (req: Request, res: Response) => {
   const bookId = parseInt(req.params.id as string, 10);

@@ -19,10 +19,19 @@ export function getBookById(id: number): Book | undefined {
   return get('SELECT * FROM books WHERE id = ?', [id]) as unknown as Book | undefined;
 }
 
+export const SEARCH_MAX_LENGTH = 100;
+
+export class SearchValidationError extends Error {}
+
 export function searchBooks(query: string): Book[] {
-  const pattern = `%${query}%`;
+  const trimmed = query.trim();
+  if (trimmed === '') return getAllBooks();
+  if (trimmed.length > SEARCH_MAX_LENGTH) {
+    throw new SearchValidationError('Search query must be 100 characters or fewer');
+  }
+  const pattern = `%${trimmed.replace(/[\\%_]/g, '\\$&')}%`;
   return all(
-    'SELECT * FROM books WHERE title LIKE ? OR author LIKE ? ORDER BY title',
+    "SELECT * FROM books WHERE title LIKE ? ESCAPE '\\' OR author LIKE ? ESCAPE '\\' ORDER BY title",
     [pattern, pattern]
   ) as unknown as Book[];
 }
