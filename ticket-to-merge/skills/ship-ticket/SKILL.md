@@ -44,8 +44,8 @@ Invoke the skill `ticket-to-merge:review-pr` with no arguments. It writes `.tick
 
 1. Read `.ticket-to-merge/last-review.json`. Select the findings with `severity` high or medium. If there are none, report "nothing to fix" and stop.
 2. For the selected findings about behaviour (category correctness or security), launch `ticket-to-merge:test-writer`: "Write one regression test per finding id in .ticket-to-merge/last-review.json: <ids>. Each must fail on the current code." Verify red as in build step 2, then commit `test: add regression tests for review findings`. Save that commit's sha as `TESTS_SHA` for the step 5 gates.
-3. Launch `ticket-to-merge:implementer` with the findings file path and the ids: "Fix the root cause of these confirmed findings, then make the full suite pass. Test-coverage findings (category tests) are handled by the test-writer, not you."
-4. For findings in the category tests, the test-writer adds the missing tests in step 2, together with the behaviour tests.
+3. Launch `ticket-to-merge:implementer` with the findings file path and the ids: "Fix the root cause of these confirmed findings, then make the full suite pass."
+4. A finding about a test that asserts the wrong behaviour goes to the test-writer in step 2, together with the behaviour tests.
 5. Run the build step 5 gates again, then commit `fix: address review findings <ids>`.
 6. Re-review once, cheaply. Launch only `ticket-to-merge:review-refuter`, giving it the fixed findings and the new diff (`git diff <base>`), and asking which findings still reproduce. Do not run a second full review.
 

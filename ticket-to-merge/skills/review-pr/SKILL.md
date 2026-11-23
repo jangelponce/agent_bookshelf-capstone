@@ -21,20 +21,19 @@ Run each step with Bash:
 4. Criteria: if `SPEC.md` exists, use it. Otherwise copy `${CLAUDE_SKILL_DIR}/book-101-criteria.md` to `.ticket-to-merge/criteria.md` and use that.
 5. List the changed files: `git diff --name-only "$MB"`.
 
-## 2. Fan out: three reviewers in parallel
+## 2. Fan out: two reviewers in parallel
 
-In ONE message, launch these three agents. Give each the same short prompt with the diff path, the criteria path and the changed-file list. Tell each to read the full changed files, and to answer with ONLY its JSON array.
+In ONE message, launch these two agents. Give each the same short prompt with the diff path, the criteria path and the changed-file list. Tell each to read the full changed files, and to answer with ONLY its JSON array.
 
 - `ticket-to-merge:review-correctness`
 - `ticket-to-merge:review-security`
-- `ticket-to-merge:review-tests`
 
 Do not pass your own opinions or hypotheses to them.
 
 ## 3. Merge
 
 1. Parse each reviewer's JSON array. If one returns invalid JSON, re-ask that same agent once for the JSON only.
-2. Give the findings ids by reviewer: `C1..` for correctness, `S1..` for security, `T1..` for tests.
+2. Give the findings ids by reviewer: `C1..` for correctness, `S1..` for security.
 3. Drop exact duplicates, meaning the same file, a line within ±2, and the same root cause. Keep the higher severity.
 4. Write the result to `.ticket-to-merge/candidates.json`.
 5. If there are zero candidates, skip step 4.

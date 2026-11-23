@@ -27,6 +27,7 @@ Read the diff, then read the full current version of every changed file. Context
 - **Every surface in the spec.** Does each one (model, JSON API, HTMX fragment) apply the same rules?
 - **Regressions.** Did an existing endpoint change behaviour (for example `GET /api/books` without `q`)?
 - **Scope.** Does the diff change the schema, the seed, dependencies or protected files? Each of those is a finding.
+- **Wrong tests.** Does a changed test assert behaviour that contradicts a criterion (for example, expecting `[]` for an empty query)? Report the assertion. Missing coverage alone is not a finding: an untested bug is reported once, as the code defect.
 
 ## Output
 
