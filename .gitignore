@@ -149,3 +149,6 @@ vite.config.ts.timestamp-*
 *.db
 *.sqlite
 *.sqlite3
+
+# ticket-to-merge working files
+.ticket-to-merge/

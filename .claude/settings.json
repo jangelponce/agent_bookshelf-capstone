@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Edit(./.env)",
+      "Edit(./.env.*)",
+      "Edit(./bookshelf.db*)",
+      "Edit(./src/db/seed.sql)",
+      "Edit(./src/db/schema.sql)",
+      "Bash(npm install *)",
+      "Bash(npm i *)"
+    ]
+  }
+}
