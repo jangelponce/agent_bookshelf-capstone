@@ -26,13 +26,13 @@ Then run `mkdir -p .ticket-to-merge`.
    - the failures come from missing behaviour (a failed assertion, or a missing export or route), not from a syntax or import mistake in the test;
    - every test that existed before still passes.
    If the gate fails, send the output back to the same agent once.
-3. Commit the tests: `git add tests && git commit -m "test: add failing tests for <ticket id>"`.
+3. Commit the tests: `git add tests && git commit -m "test: add failing tests for <ticket id>"`. Save that commit's sha as `TESTS_SHA`. Commit messages carry no AI attribution trailers.
 4. **Green.** Launch `ticket-to-merge:implementer`: "Make the failing tests in <files> pass, following SPEC.md." A SubagentStop gate re-runs the suite and returns the agent to work while it is red.
 5. **Verify green yourself.** Each check must pass:
    - `npm run test:run`: all tests pass.
    - `npx tsc --noEmit`: zero errors.
-   - `git diff --stat HEAD~1 -- tests`: empty. The implementer must not have changed any test.
-   - `git status --porcelain -- src/db package.json package-lock.json .env bookshelf.db`: empty.
+   - `git diff --stat "$TESTS_SHA" -- tests`: empty. The implementer must not have changed any test.
+   - `git status --porcelain -- src/db package.json package-lock.json`: empty. Secret files are checked by the guardrail hook's integrity snapshot, not by you; never name them in commands.
    If a check fails, resume the implementer once with the failure output. If it still fails, stop and report.
 6. Commit: `git add -A src && git commit -m "feat: <ticket summary>"`.
 
@@ -43,7 +43,7 @@ Invoke the skill `ticket-to-merge:review-pr` with no arguments. It writes `.tick
 ## Stage: fix (one loop, at most)
 
 1. Read `.ticket-to-merge/last-review.json`. Select the findings with `severity` high or medium. If there are none, report "nothing to fix" and stop.
-2. For the selected findings about behaviour (category correctness or security), launch `ticket-to-merge:test-writer`: "Write one regression test per finding id in .ticket-to-merge/last-review.json: <ids>. Each must fail on the current code." Verify red as in build step 2, then commit `test: add regression tests for review findings`.
+2. For the selected findings about behaviour (category correctness or security), launch `ticket-to-merge:test-writer`: "Write one regression test per finding id in .ticket-to-merge/last-review.json: <ids>. Each must fail on the current code." Verify red as in build step 2, then commit `test: add regression tests for review findings`. Save that commit's sha as `TESTS_SHA` for the step 5 gates.
 3. Launch `ticket-to-merge:implementer` with the findings file path and the ids: "Fix the root cause of these confirmed findings, then make the full suite pass. Test-coverage findings (category tests) are handled by the test-writer, not you."
 4. For findings in the category tests, the test-writer adds the missing tests in step 2, together with the behaviour tests.
 5. Run the build step 5 gates again, then commit `fix: address review findings <ids>`.

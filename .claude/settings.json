@@ -11,5 +11,9 @@
       "Bash(npm install *)",
       "Bash(npm i *)"
     ]
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
   }
 }
