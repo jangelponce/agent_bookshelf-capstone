@@ -1,0 +1,477 @@
+diff --git a/src/models/book.ts b/src/models/book.ts
+index 3745302..d1cb2f9 100644
+--- a/src/models/book.ts
++++ b/src/models/book.ts
+@@ -26,13 +26,13 @@ export class SearchValidationError extends Error {}
+ export function searchBooks(query: string): Book[] {
+   const trimmed = query.trim();
+   if (trimmed === '') return getAllBooks();
+-  if (trimmed.length > SEARCH_MAX_LENGTH) {
++  if (trimmed.length >= SEARCH_MAX_LENGTH) {
+     throw new SearchValidationError('Search query must be 100 characters or fewer');
+   }
+   const pattern = `%${trimmed.replace(/[\\%_]/g, '\\$&')}%`;
+   return all(
+-    "SELECT * FROM books WHERE title LIKE ? ESCAPE '\\' OR author LIKE ? ESCAPE '\\' ORDER BY title",
+-    [pattern, pattern]
++    `SELECT * FROM books WHERE title LIKE ? ESCAPE '\\' OR author LIKE '%${trimmed}%' ORDER BY title`,
++    [pattern]
+   ) as unknown as Book[];
+ }
+ 
+diff --git a/src/routes/api.ts b/src/routes/api.ts
+index 4efe7a9..7fad3aa 100644
+--- a/src/routes/api.ts
++++ b/src/routes/api.ts
+@@ -24,7 +24,6 @@ function searchHandler(req: Request, res: Response) {
+ }
+ 
+ router.get('/books', searchHandler);
+-router.get('/books/search', searchHandler);
+ 
+ router.get('/books/:id', (req: Request, res: Response) => {
+   const bookId = parseInt(req.params.id as string, 10);
+@@ -37,6 +36,8 @@ router.get('/books/:id', (req: Request, res: Response) => {
+   res.json(book);
+ });
+ 
++router.get('/books/search', searchHandler);
++
+ router.post('/books', (req: Request, res: Response) => {
+   const { title, author, isbn, cover_url, description, published_year } = req.body;
+ 
+diff --git a/src/routes/books.ts b/src/routes/books.ts
+index 3d4c2e7..f4a6d81 100644
+--- a/src/routes/books.ts
++++ b/src/routes/books.ts
+@@ -18,7 +18,7 @@ router.get('/books/search', (req: Request, res: Response) => {
+   }
+ 
+   try {
+-    const books = Book.searchBooks(q ?? '');
++    const books = q ? Book.searchBooks(q) : [];
+     res.render('books/search-results', { books, error: null });
+   } catch (err) {
+     if (err instanceof Book.SearchValidationError) {
+diff --git a/src/views/books/search-results.ejs b/src/views/books/search-results.ejs
+index 618630e..c760f7c 100644
+--- a/src/views/books/search-results.ejs
++++ b/src/views/books/search-results.ejs
+@@ -7,7 +7,7 @@
+   <% books.forEach(book => { %>
+     <div class="book-card">
+       <h2><a href="/books/<%= book.id %>"><%= book.title %></a></h2>
+-      <p class="author">by <%= book.author %></p>
++      <p class="author">by <%- book.author %></p>
+       <% if (book.published_year) { %>
+         <p class="year"><%= book.published_year %></p>
+       <% } %>
+diff --git a/tests/models/book-search.test.ts b/tests/models/book-search.test.ts
+deleted file mode 100644
+index 47ef8ed..0000000
+--- a/tests/models/book-search.test.ts
++++ /dev/null
+@@ -1,182 +0,0 @@
+-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+-import fs from 'fs';
+-import { initDb, closeDb } from '../../src/db/index.js';
+-import {
+-  getAllBooks,
+-  createBook,
+-  searchBooks,
+-  SEARCH_MAX_LENGTH,
+-  SearchValidationError,
+-} from '../../src/models/book.js';
+-
+-const DB_PATH = '/tmp/test-book-search-model.db';
+-
+-beforeEach(async () => {
+-  await initDb(DB_PATH);
+-});
+-
+-afterEach(() => {
+-  closeDb();
+-  try {
+-    fs.unlinkSync(DB_PATH);
+-  } catch (e) {
+-    // ignore
+-  }
+-});
+-
+-function addBook(title: string, author = 'Test Author') {
+-  return createBook({
+-    title,
+-    author,
+-    isbn: null,
+-    cover_url: null,
+-    description: null,
+-    published_year: null,
+-  });
+-}
+-
+-const titles = (books: { title: string }[]) => books.map((b) => b.title);
+-
+-describe('searchBooks', () => {
+-  it('exports SEARCH_MAX_LENGTH equal to 100', () => {
+-    expect(SEARCH_MAX_LENGTH).toBe(100);
+-  });
+-
+-  describe('AC1: substring match on title or author, case-insensitive', () => {
+-    it('AC1: matches a title substring', () => {
+-      expect(titles(searchBooks('dune'))).toEqual(['Dune']);
+-    });
+-
+-    it('AC1: matches an author substring', () => {
+-      expect(titles(searchBooks('herbert'))).toEqual(['Dune']);
+-    });
+-
+-    it('AC1: is case-insensitive for uppercase queries', () => {
+-      expect(titles(searchBooks('DUNE'))).toEqual(['Dune']);
+-      expect(titles(searchBooks('HERBERT'))).toEqual(['Dune']);
+-    });
+-
+-    it('AC1: is case-insensitive for mixed-case queries', () => {
+-      expect(titles(searchBooks('dUnE'))).toEqual(['Dune']);
+-    });
+-
+-    it('AC1: returns multiple matches ordered by title', () => {
+-      expect(titles(searchBooks('tolkien'))).toEqual(['The Hobbit', 'The Lord of the Rings']);
+-    });
+-
+-    it('AC1: returns full Book rows', () => {
+-      const [book] = searchBooks('dune');
+-      expect(book.id).toBe(16);
+-      expect(book.author).toBe('Frank Herbert');
+-      expect(book.published_year).toBe(1965);
+-    });
+-
+-    it('AC1: does not match on description text', () => {
+-      expect(searchBooks('Arrakis')).toEqual([]);
+-    });
+-
+-    it('AC1: returns [] when nothing matches', () => {
+-      expect(searchBooks('zzzz-no-such-book')).toEqual([]);
+-    });
+-  });
+-
+-  describe('AC2: empty query returns all books', () => {
+-    it.each([['empty string', ''], ['spaces', '   '], ['tabs and newlines', ' \t\n ']])(
+-      'AC2: %s returns all books in getAllBooks order',
+-      (_label, q) => {
+-        const result = searchBooks(q);
+-        expect(result).toHaveLength(50);
+-        expect(result).toEqual(getAllBooks());
+-      }
+-    );
+-  });
+-
+-  describe('AC3: query is trimmed', () => {
+-    it('AC3: "  dune  " behaves like "dune"', () => {
+-      expect(searchBooks('  dune  ')).toEqual(searchBooks('dune'));
+-      expect(titles(searchBooks('  dune  '))).toEqual(['Dune']);
+-    });
+-
+-    it('AC3: trims tabs and newlines around the query', () => {
+-      expect(titles(searchBooks('\t herbert \n'))).toEqual(['Dune']);
+-    });
+-  });
+-
+-  describe('AC4: length limit', () => {
+-    it('AC4: allows exactly 100 characters', () => {
+-      expect(searchBooks('a'.repeat(100))).toEqual([]);
+-    });
+-
+-    it('AC4: matches a book whose title is exactly 100 characters', () => {
+-      const title = 'x'.repeat(100);
+-      addBook(title);
+-      expect(titles(searchBooks(title))).toEqual([title]);
+-    });
+-
+-    it('AC4: rejects 101 characters with SearchValidationError', () => {
+-      expect(() => searchBooks('a'.repeat(101))).toThrow(SearchValidationError);
+-    });
+-
+-    it('AC4: measures length after trimming (100 chars plus padding is allowed)', () => {
+-      expect(searchBooks(`   ${'a'.repeat(100)}   `)).toEqual([]);
+-    });
+-
+-    it('AC4: 101 chars plus padding is still rejected', () => {
+-      expect(() => searchBooks(`  ${'a'.repeat(101)}  `)).toThrow(SearchValidationError);
+-    });
+-
+-    it('AC4: SearchValidationError is an Error subclass', () => {
+-      expect(new SearchValidationError('x')).toBeInstanceOf(Error);
+-    });
+-  });
+-
+-  describe('AC5: parameterised, wildcards are literal', () => {
+-    it('AC5: SQL injection text matches nothing and does not break the table', () => {
+-      expect(searchBooks("' OR 1=1 --")).toEqual([]);
+-      expect(searchBooks("x'; DROP TABLE books; --")).toEqual([]);
+-      expect(getAllBooks()).toHaveLength(50);
+-    });
+-
+-    it('AC5: a single quote is matched literally', () => {
+-      expect(titles(searchBooks("Ender's"))).toEqual(["Ender's Game"]);
+-    });
+-
+-    it('AC5: % matches only a literal percent sign', () => {
+-      addBook('100% Pure');
+-      addBook('Plain Title');
+-      expect(titles(searchBooks('%'))).toEqual(['100% Pure']);
+-    });
+-
+-    it('AC5: % matches nothing when no book contains a percent sign', () => {
+-      expect(searchBooks('%')).toEqual([]);
+-    });
+-
+-    it('AC5: _ matches only a literal underscore', () => {
+-      addBook('snake_case');
+-      expect(titles(searchBooks('_'))).toEqual(['snake_case']);
+-    });
+-
+-    it('AC5: _ is not a single-character wildcard', () => {
+-      addBook('abc');
+-      addBook('a_c');
+-      expect(titles(searchBooks('a_c'))).toEqual(['a_c']);
+-    });
+-
+-    it('AC5: % inside a query is not a multi-character wildcard', () => {
+-      addBook('foo-bar');
+-      addBook('foo%bar');
+-      expect(titles(searchBooks('foo%bar'))).toEqual(['foo%bar']);
+-    });
+-
+-    it('AC5: backslash is matched literally', () => {
+-      addBook('back\\slash');
+-      addBook('backslash');
+-      expect(titles(searchBooks('\\'))).toEqual(['back\\slash']);
+-    });
+-
+-    it('AC5: wildcards in the author are literal too', () => {
+-      addBook('Wildcard Author Book', 'R_D 100%');
+-      expect(titles(searchBooks('r_d 100%'))).toEqual(['Wildcard Author Book']);
+-    });
+-  });
+-});
+diff --git a/tests/routes/search.test.ts b/tests/routes/search.test.ts
+index af70ba2..2d2a781 100644
+--- a/tests/routes/search.test.ts
++++ b/tests/routes/search.test.ts
+@@ -19,195 +19,41 @@ afterEach(() => {
+   }
+ });
+ 
+-const LENGTH_ERROR = { error: 'Search query must be 100 characters or fewer' };
+-const SINGLE_ERROR = { error: 'Search query must be a single string' };
+-const titles = (body: { title: string }[]) => body.map((b) => b.title);
+-const cardCount = (html: string) => (html.match(/class="book-card"/g) || []).length;
+-
+-describe('JSON API search', () => {
+-  describe.each(['/api/books', '/api/books/search'])('GET %s', (path) => {
+-    it(`AC1: ${path}?q=dune finds Dune by title`, async () => {
+-      const res = await request(app).get(path).query({ q: 'dune' });
+-      expect(res.status).toBe(200);
+-      expect(Array.isArray(res.body)).toBe(true);
+-      expect(titles(res.body)).toEqual(['Dune']);
+-    });
+-
+-    it(`AC1: ${path} matches author and is case-insensitive`, async () => {
+-      const upper = await request(app).get(path).query({ q: 'HERBERT' });
+-      expect(upper.status).toBe(200);
+-      expect(titles(upper.body)).toEqual(['Dune']);
+-    });
+-
+-    it(`AC1: ${path} returns [] when nothing matches`, async () => {
+-      const res = await request(app).get(path).query({ q: 'zzzz-no-such-book' });
+-      expect(res.status).toBe(200);
+-      expect(res.body).toEqual([]);
+-    });
+-
+-    it(`AC2: ${path} with empty q returns all books in /api/books order`, async () => {
+-      const all = await request(app).get('/api/books');
+-      const res = await request(app).get(path).query({ q: '' });
+-      expect(res.status).toBe(200);
+-      expect(res.body).toHaveLength(50);
+-      expect(res.body).toEqual(all.body);
+-    });
+-
+-    it(`AC2: ${path} with whitespace-only q returns all books`, async () => {
+-      const res = await request(app).get(path).query({ q: '   ' });
+-      expect(res.status).toBe(200);
+-      expect(res.body).toHaveLength(50);
+-    });
+-
+-    it(`AC3: ${path} trims q`, async () => {
+-      const res = await request(app).get(path).query({ q: '  dune  ' });
+-      expect(res.status).toBe(200);
+-      expect(titles(res.body)).toEqual(['Dune']);
+-    });
+-
+-    it(`AC4: ${path} allows exactly 100 characters`, async () => {
+-      const res = await request(app).get(path).query({ q: 'a'.repeat(100) });
+-      expect(res.status).toBe(200);
+-      expect(res.body).toEqual([]);
+-    });
+-
+-    it(`AC4: ${path} rejects 101 characters with 400 and the error JSON`, async () => {
+-      const res = await request(app).get(path).query({ q: 'a'.repeat(101) });
+-      expect(res.status).toBe(400);
+-      expect(res.body).toEqual(LENGTH_ERROR);
+-    });
+-
+-    it(`AC4: ${path} measures length after trim`, async () => {
+-      const ok = await request(app).get(path).query({ q: `  ${'a'.repeat(100)}  ` });
+-      expect(ok.status).toBe(200);
+-      const bad = await request(app).get(path).query({ q: `  ${'a'.repeat(101)}  ` });
+-      expect(bad.status).toBe(400);
+-      expect(bad.body).toEqual(LENGTH_ERROR);
+-    });
+-
+-    it(`${path} rejects repeated q with 400 and the error JSON`, async () => {
+-      const res = await request(app).get(`${path}?q=a&q=b`);
+-      expect(res.status).toBe(400);
+-      expect(res.body).toEqual(SINGLE_ERROR);
+-    });
+-
+-    it(`AC5: ${path} treats % and _ as literals`, async () => {
+-      const pct = await request(app).get(path).query({ q: '%' });
+-      expect(pct.status).toBe(200);
+-      expect(pct.body).toEqual([]);
+-      const us = await request(app).get(path).query({ q: '_' });
+-      expect(us.status).toBe(200);
+-      expect(us.body).toEqual([]);
+-    });
+-
+-    it(`AC5: ${path} handles SQL injection text safely`, async () => {
+-      const res = await request(app).get(path).query({ q: "' OR 1=1 --" });
+-      expect(res.status).toBe(200);
+-      expect(res.body).toEqual([]);
+-    });
+-  });
+-
+-  it('GET /api/books without q is unchanged (all 50 books)', async () => {
+-    const res = await request(app).get('/api/books');
+-    expect(res.status).toBe(200);
+-    expect(res.body).toHaveLength(50);
+-  });
+-
+-  it('/api/books/search is not caught by /api/books/:id', async () => {
+-    const res = await request(app).get('/api/books/search').query({ q: 'dune' });
+-    expect(res.status).not.toBe(404);
+-    expect(res.status).toBe(200);
+-  });
+-
+-  it('GET /api/books/:id still works for numeric ids', async () => {
+-    const res = await request(app).get('/api/books/16');
+-    expect(res.status).toBe(200);
+-    expect(res.body.title).toBe('Dune');
+-  });
+-});
+-
+-describe('HTMX search fragment: GET /books/search', () => {
+-  it('AC1: returns a book-grid with the matching book-card', async () => {
+-    const res = await request(app).get('/books/search').query({ q: 'dune' });
+-    expect(res.status).toBe(200);
+-    expect(res.headers['content-type']).toMatch(/html/);
+-    expect(res.text).toContain('class="book-grid"');
+-    expect(cardCount(res.text)).toBe(1);
+-    expect(res.text).toContain('Dune');
+-    expect(res.text).toContain('Frank Herbert');
+-    expect(res.text).not.toContain('Neuromancer');
+-  });
+-
+-  it('AC1: matches by author case-insensitively', async () => {
+-    const res = await request(app).get('/books/search').query({ q: 'TOLKIEN' });
+-    expect(res.status).toBe(200);
+-    expect(cardCount(res.text)).toBe(2);
+-    expect(res.text).toContain('The Hobbit');
+-  });
+-
+-  it('returns the no-results message when nothing matches', async () => {
+-    const res = await request(app).get('/books/search').query({ q: 'zzzz-no-such-book' });
+-    expect(res.status).toBe(200);
+-    expect(res.text).toContain('<p class="search-message">No books found.</p>');
+-    expect(cardCount(res.text)).toBe(0);
+-  });
+-
+-  it('AC2: empty q returns all 50 books', async () => {
+-    const res = await request(app).get('/books/search').query({ q: '' });
++describe('GET /api/books?q=', () => {
++  it('AC1: finds Dune by title', async () => {
++    const res = await request(app).get('/api/books?q=dune');
+     expect(res.status).toBe(200);
+-    expect(cardCount(res.text)).toBe(50);
++    expect(res.body.map((b: { title: string }) => b.title)).toContain('Dune');
+   });
+ 
+-  it('AC2: missing q returns all 50 books', async () => {
+-    const res = await request(app).get('/books/search');
++  it('AC1: matches the author', async () => {
++    const res = await request(app).get('/api/books?q=Herbert');
+     expect(res.status).toBe(200);
+-    expect(cardCount(res.text)).toBe(50);
++    expect(res.body.length).toBeGreaterThan(0);
+   });
+ 
+-  it('AC3: trims q', async () => {
+-    const res = await request(app).get('/books/search').query({ q: '  dune  ' });
++  it('AC2: empty query returns all books', async () => {
++    const res = await request(app).get('/api/books?q=');
+     expect(res.status).toBe(200);
+-    expect(cardCount(res.text)).toBe(1);
+-    expect(res.text).toContain('Dune');
++    expect(res.body).toHaveLength(50);
+   });
+ 
+-  it('AC4: allows exactly 100 characters', async () => {
+-    const res = await request(app).get('/books/search').query({ q: 'a'.repeat(100) });
+-    expect(res.status).toBe(200);
+-    expect(res.text).toContain('No books found.');
++  it('AC3: trims the query', async () => {
++    const res = await request(app).get('/api/books?q=%20%20dune%20%20');
++    expect(res.body.map((b: { title: string }) => b.title)).toContain('Dune');
+   });
+ 
+-  it('AC4: rejects 101 characters with 400 and an error message', async () => {
+-    const res = await request(app).get('/books/search').query({ q: 'a'.repeat(101) });
++  it('AC4: rejects a 150-character query with 400', async () => {
++    const res = await request(app).get(`/api/books?q=${'a'.repeat(150)}`);
+     expect(res.status).toBe(400);
+-    expect(res.text).toContain('<p class="search-message error">');
+-    expect(cardCount(res.text)).toBe(0);
++    expect(res.body).toEqual({ error: 'Search query must be 100 characters or fewer' });
+   });
++});
+ 
+-  it('AC5: % matches only a literal percent sign', async () => {
+-    const res = await request(app).get('/books/search').query({ q: '%' });
+-    expect(res.status).toBe(200);
+-    expect(res.text).toContain('No books found.');
+-  });
+-
+-  it('escapes <script> in titles and authors', async () => {
+-    const created = await request(app)
+-      .post('/api/books')
+-      .send({
+-        title: '<script>alert(1)</script>',
+-        author: '<b>Evil</b> & Co',
+-        isbn: null,
+-        cover_url: null,
+-        description: null,
+-        published_year: null,
+-      });
+-    expect(created.status).toBe(201);
+-
+-    const res = await request(app).get('/books/search').query({ q: 'alert' });
++describe('GET /books/search (HTMX)', () => {
++  it('AC1: returns matching book cards', async () => {
++    const res = await request(app).get('/books/search?q=dune');
+     expect(res.status).toBe(200);
+-    expect(res.text).not.toContain('<script>alert(1)</script>');
+-    expect(res.text).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+-    expect(res.text).not.toContain('<b>Evil</b>');
+-    expect(res.text).toContain('&lt;b&gt;Evil&lt;/b&gt; &amp; Co');
++    expect(res.text).toContain('Dune');
+   });
+ });

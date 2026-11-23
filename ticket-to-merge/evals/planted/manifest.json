@@ -1,0 +1,13 @@
+{
+  "branch": "planted/book-101",
+  "base": "feat/book-101-search",
+  "note": "Five bugs planted on top of the clean BOOK-101 implementation; tests trimmed to a passing happy-path set so no test points at a bug. Everything else in the diff is clean code the reviewer must not flag.",
+  "bugs": [
+    { "id": "B1", "title": "Length limit off by one (>= 100 rejects exactly 100)", "category": "correctness", "file": "src/models/book.ts", "lines": [29, 29] },
+    { "id": "B2", "title": "Author clause interpolates the query into SQL", "category": "security", "file": "src/models/book.ts", "lines": [32, 35] },
+    { "id": "B3", "title": "/api/books/search registered after /api/books/:id (404)", "category": "correctness", "file": "src/routes/api.ts", "lines": [28, 39] },
+    { "id": "B4", "title": "HTMX empty query returns no books instead of all", "category": "correctness", "file": "src/routes/books.ts", "lines": [21, 21] },
+    { "id": "B5", "title": "Unescaped author (<%-) in the search fragment: XSS", "category": "security", "file": "src/views/books/search-results.ejs", "lines": [10, 10] }
+  ],
+  "known_real_extras": []
+}
