@@ -9,11 +9,15 @@
 
 - [x] T1 SPEC.md and CLAUDE.md (inline): `f03f40b`
 - [x] T2 Plugin: agents, skills, and guardrail hooks with 113 hook tests (hooks delegated to a writer): `5be4625`
-- [ ] T3 Build with `/ship-ticket build`, priced
-- [ ] T4 Review and fix with `/ship-ticket review` and `/ship-ticket fix`, priced
-- [ ] T5 Planted-bug branch, `/review-pr` 3×, recall and precision
-- [ ] T6 One cost lever, planted bugs re-run
-- [ ] T7 README covering the submission checklist
+- [x] T3 Build with `/ship-ticket build`, priced: `23b2262`, `15dd027` ($0.92)
+- [x] T4 Review and fix, priced: review $0.95 (0 confirmed on clean code); fix $1.01 on `fixloop/book-101`
+- [x] T5 Planted-bug branch, `/review-pr` 3×: recall 1.00, precision 0.54
+- [x] T6 Lever (drop review-tests): $0.91 to $0.72 per review (−21%); recall 1.00, precision 1.00: `da6a619`
+- [x] T7 README covering the submission checklist
+
+## Next
+
+- Push `feat/book-101-search`, `planted/book-101` and `fixloop/book-101` to the fork, then submit the repo link. This step needs the user's approval.
 
 ## Evidence
 
